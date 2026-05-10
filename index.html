@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SignAI — ASL Detection</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg:        #080b0f;
+            --surface:   #0e1318;
+            --card:      #121920;
+            --border:    #1e2d3a;
+            --accent:    #00ffc8;
+            --accent2:   #00a8ff;
+            --warn:      #ff6b35;
+            --text:      #e8f4f0;
+            --muted:     #4a6670;
+            --glow:      0 0 30px rgba(0,255,200,0.15);
+        }
+
+        html, body { height: 100%; }
+
+        body {
+            font-family: 'DM Mono', monospace;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(0,255,200,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,255,200,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            top: -200px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 800px;
+            height: 500px;
+            background: radial-gradient(ellipse, rgba(0,255,200,0.06) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .wrapper {
+            position: relative;
+            z-index: 1;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 24px 60px;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 28px 0 40px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 48px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .logo-icon {
+            width: 42px;
+            height: 42px;
+            border: 1.5px solid var(--accent);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: var(--glow);
+            animation: pulse-border 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse-border {
+            0%, 100% { box-shadow: 0 0 15px rgba(0,255,200,0.15); }
+            50%       { box-shadow: 0 0 30px rgba(0,255,200,0.35); }
+        }
+
+        .logo-text {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            font-size: 1.5rem;
+            letter-spacing: -0.02em;
+            color: var(--text);
+        }
+
+        .logo-text span { color: var(--accent); }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            font-size: 0.72rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
+            background: var(--surface);
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--muted);
+            transition: background 0.4s;
+        }
+
+        .status-dot.live {
+            background: var(--accent);
+            box-shadow: 0 0 8px var(--accent);
+            animation: blink 1.5s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0.3; }
+        }
+
+        .hero {
+            text-align: center;
+            margin-bottom: 48px;
+            animation: fadeUp 0.8s ease both;
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .hero-label {
+            display: inline-block;
+            font-size: 0.7rem;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 16px;
+            padding: 6px 14px;
+            border: 1px solid rgba(0,255,200,0.2);
+            border-radius: 100px;
+        }
+
+        .hero h1 {
+            font-family: 'Syne', sans-serif;
+            font-size: clamp(2.2rem, 5vw, 3.8rem);
+            font-weight: 800;
+            line-height: 1.05;
+            letter-spacing: -0.03em;
+            color: var(--text);
+            margin-bottom: 16px;
+        }
+
+        .hero h1 em {
+            font-style: normal;
+            color: var(--accent);
+        }
+
+        .hero p {
+            font-size: 0.9rem;
+            color: var(--muted);
+            line-height: 1.7;
+            max-width: 480px;
+            margin: 0 auto;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 24px;
+            align-items: start;
+        }
+
+        @media (max-width: 820px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+
+        .camera-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            overflow: hidden;
+            animation: fadeUp 0.8s 0.1s ease both;
+        }
+
+        .camera-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+        }
+
+        .camera-dots { display: flex; gap: 6px; }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .dot-r { background: #ff5f56; }
+        .dot-y { background: #ffbd2e; }
+        .dot-g { background: #27c93f; }
+
+        .camera-label {
+            font-size: 0.7rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .camera-rec {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.68rem;
+            letter-spacing: 0.1em;
+            color: var(--muted);
+        }
+
+        .rec-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--warn);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .rec-dot.active {
+            opacity: 1;
+            animation: blink 1s infinite;
+        }
+
+        .video-wrapper {
+            position: relative;
+            background: #000;
+            aspect-ratio: 4/3;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transform: scaleX(-1);
+        }
+
+        canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1);
+            pointer-events: none;
+        }
+
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+            animation: scan 2.5s linear infinite;
+            pointer-events: none;
+        }
+
+        .scan-line.active { opacity: 0.6; }
+
+        @keyframes scan {
+            0%   { top: 0; }
+            100% { top: 100%; }
+        }
+
+        .corner {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-color: var(--accent);
+            border-style: solid;
+            opacity: 0;
+            transition: opacity 0.4s;
+            pointer-events: none;
+        }
+
+        .corner.active { opacity: 0.7; }
+        .corner.tl { top: 16px; left: 16px; border-width: 2px 0 0 2px; }
+        .corner.tr { top: 16px; right: 16px; border-width: 2px 2px 0 0; }
+        .corner.bl { bottom: 16px; left: 16px; border-width: 0 0 2px 2px; }
+        .corner.br { bottom: 16px; right: 16px; border-width: 0 2px 2px 0; }
+
+        .no-camera {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            color: var(--muted);
+            font-size: 0.8rem;
+            letter-spacing: 0.05em;
+        }
+
+        .no-camera-icon { font-size: 2.5rem; opacity: 0.3; }
+
+        .btn-start {
+            width: 100%;
+            padding: 18px;
+            background: transparent;
+            border: none;
+            border-top: 1.5px solid var(--accent);
+            color: var(--accent);
+            font-family: 'Syne', sans-serif;
+            font-weight: 700;
+            font-size: 0.85rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .btn-start:hover {
+            background: rgba(0,255,200,0.08);
+        }
+
+        .btn-start.active {
+            border-color: var(--warn);
+            color: var(--warn);
+            background: rgba(255,107,53,0.06);
+        }
+
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            animation: fadeUp 0.8s 0.2s ease both;
+        }
+
+        .sign-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 32px 24px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sign-card::before {
+            content: '';
+            position: absolute;
+            top: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 120px;
+            background: radial-gradient(ellipse, rgba(0,255,200,0.08), transparent 70%);
+            pointer-events: none;
+        }
+
+        .sign-card-label {
+            font-size: 0.68rem;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 20px;
+        }
+
+        .sign-letter {
+            font-family: 'Syne', sans-serif;
+            font-size: 6rem;
+            font-weight: 800;
+            line-height: 1;
+            color: var(--accent);
+            text-shadow: 0 0 60px rgba(0,255,200,0.4);
+            transition: all 0.2s;
+            min-height: 96px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sign-letter.flash {
+            animation: letterFlash 0.15s ease;
+        }
+
+        @keyframes letterFlash {
+            0%   { transform: scale(1.3); }
+            100% { transform: scale(1); }
+        }
+
+        .sign-name {
+            font-size: 0.8rem;
+            color: var(--muted);
+            margin-top: 8px;
+            min-height: 20px;
+            letter-spacing: 0.05em;
+        }
+
+        .confidence-bar-wrap { margin-top: 20px; }
+
+        .conf-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.68rem;
+            color: var(--muted);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .conf-bar {
+            height: 4px;
+            background: var(--border);
+            border-radius: 100px;
+            overflow: hidden;
+        }
+
+        .conf-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent2), var(--accent));
+            border-radius: 100px;
+            transition: width 0.3s ease;
+        }
+
+        .stats-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 20px 24px;
+        }
+
+        .stats-title {
+            font-size: 0.68rem;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 16px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .stat-item {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+        }
+
+        .stat-value {
+            font-family: 'Syne', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text);
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 0.65rem;
+            color: var(--muted);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+
+        .history-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 20px 24px;
+        }
+
+        .history-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .history-title {
+            font-size: 0.68rem;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .btn-clear {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            font-family: 'DM Mono', monospace;
+            font-size: 0.65rem;
+            letter-spacing: 0.08em;
+            padding: 4px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-clear:hover {
+            border-color: var(--warn);
+            color: var(--warn);
+        }
+
+        .history-letters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            min-height: 44px;
+        }
+
+        .history-chip {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Syne', sans-serif;
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: var(--accent);
+            animation: chipIn 0.2s ease both;
+        }
+
+        @keyframes chipIn {
+            from { transform: scale(0.5); opacity: 0; }
+            to   { transform: scale(1);   opacity: 1; }
+        }
+
+        .history-empty {
+            font-size: 0.75rem;
+            color: var(--muted);
+            font-style: italic;
+            padding: 8px 0;
+        }
+
+        footer {
+            text-align: center;
+            padding-top: 48px;
+            font-size: 0.7rem;
+            color: var(--muted);
+            letter-spacing: 0.08em;
+            border-top: 1px solid var(--border);
+            margin-top: 48px;
+        }
+
+        footer span { color: var(--accent); }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+
+    <header>
+        <div class="logo">
+            <div class="logo-icon">🤟</div>
+            <div class="logo-text">Sign<span>AI</span></div>
+        </div>
+        <div class="status-pill">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="statusText">offline</span>
+        </div>
+    </header>
+
+    <div class="hero">
+        <div class="hero-label">YOLOv11 — Real Time Detection</div>
+        <h1>Read your hands,<br><em>understand your signs.</em></h1>
+        <p>Point your hand at the camera and the AI will detect American Sign Language letters in real time.</p>
+    </div>
+
+    <div class="main-grid">
+
+        <div class="camera-card">
+            <div class="camera-topbar">
+                <div class="camera-dots">
+                    <div class="dot dot-r"></div>
+                    <div class="dot dot-y"></div>
+                    <div class="dot dot-g"></div>
+                </div>
+                <div class="camera-label">camera feed</div>
+                <div class="camera-rec">
+                    <div class="rec-dot" id="recDot"></div>
+                    <span id="recLabel">IDLE</span>
+                </div>
+            </div>
+
+            <div class="video-wrapper">
+                <video id="webcam" autoplay playsinline></video>
+                <canvas id="overlay"></canvas>
+                <div class="scan-line" id="scanLine"></div>
+                <div class="corner tl" id="c1"></div>
+                <div class="corner tr" id="c2"></div>
+                <div class="corner bl" id="c3"></div>
+                <div class="corner br" id="c4"></div>
+                <div class="no-camera" id="noCam">
+                    <div class="no-camera-icon">📷</div>
+                    <span>Camera not started</span>
+                </div>
+            </div>
+
+            <button class="btn-start" id="startBtn" onclick="toggleDetection()">
+                <span class="btn-icon">▶</span>
+                <span id="btnLabel">Start Detection</span>
+            </button>
+        </div>
+
+        <div class="right-panel">
+
+            <div class="sign-card">
+                <div class="sign-card-label">detected sign</div>
+                <div class="sign-letter" id="signLetter">—</div>
+                <div class="sign-name" id="signName">waiting for input</div>
+                <div class="confidence-bar-wrap">
+                    <div class="conf-label">
+                        <span>confidence</span>
+                        <span id="confValue">—</span>
+                    </div>
+                    <div class="conf-bar">
+                        <div class="conf-fill" id="confFill"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-card">
+                <div class="stats-title">Session stats</div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="statDetections">0</div>
+                        <div class="stat-label">detections</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="statUnique">0</div>
+                        <div class="stat-label">unique signs</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="statFrames">0</div>
+                        <div class="stat-label">frames sent</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="statFps">—</div>
+                        <div class="stat-label">response ms</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="history-card">
+                <div class="history-header">
+                    <div class="history-title">sign history</div>
+                    <button class="btn-clear" onclick="clearHistory()">clear</button>
+                </div>
+                <div class="history-letters" id="historyLetters">
+                    <div class="history-empty">No signs detected yet</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <footer>
+        Built with <span>YOLOv11</span> · FastAPI · MediaPipe &nbsp;|&nbsp; ASL Detection System
+    </footer>
+
+</div>
+<script>
+    const video      = document.getElementById('webcam');
+    const canvas     = document.getElementById('overlay');
+    const ctx        = canvas.getContext('2d');
+    const signLetter = document.getElementById('signLetter');
+    const signName   = document.getElementById('signName');
+    const confValue  = document.getElementById('confValue');
+    const confFill   = document.getElementById('confFill');
+    const startBtn   = document.getElementById('startBtn');
+    const btnLabel   = document.getElementById('btnLabel');
+    const statusDot  = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const recDot     = document.getElementById('recDot');
+    const recLabel   = document.getElementById('recLabel');
+    const scanLine   = document.getElementById('scanLine');
+    const noCam      = document.getElementById('noCam');
+    const historyEl  = document.getElementById('historyLetters');
+
+    const corners = [
+        document.getElementById('c1'), document.getElementById('c2'),
+        document.getElementById('c3'), document.getElementById('c4')
+    ];
+
+    const API_URL = 'https://abdullahzia005-asl-backend.hf.space/detect';
+
+    const ASL_NAMES = {
+        A:'Fist thumb side',    B:'Flat hand up',       C:'Curved C shape',
+        D:'Index up circle',    E:'Fingers curled',     F:'Index thumb circle',
+        G:'Index sideways',     H:'Two fingers sideways', I:'Pinky up',
+        J:'Pinky plus motion',  K:'Two up with thumb',  L:'L shape',
+        M:'Three over thumb',   N:'Two over thumb',     O:'Full circle',
+        P:'Index pointing down',Q:'Index thumb down',   R:'Fingers crossed',
+        S:'Fist thumb over',    T:'Thumb between',      U:'Two up together',
+        V:'Peace sign',         W:'Three up spread',    X:'Hooked index',
+        Y:'Thumb and pinky out',Z:'Z motion'
+    };
+
+    let isDetecting  = false;
+    let isProcessing = false;
+    let history      = [];
+    let lastSign     = null;
+    let detections   = 0;
+    let frames       = 0;
+    let uniqueSigns  = new Set();
+
+    async function setupWebcam() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: 640, height: 480 }
+            });
+            video.srcObject = stream;
+            noCam.style.display = 'none';
+            video.onloadedmetadata = () => {
+                canvas.width  = video.videoWidth;
+                canvas.height = video.videoHeight;
+            };
+            statusDot.classList.add('live');
+            statusText.textContent = 'camera live';
+        } catch (e) {
+            alert('Camera access denied. Please allow camera and refresh.');
+        }
+    }
+
+    function toggleDetection() {
+        isDetecting = !isDetecting;
+        if (isDetecting) {
+            startBtn.classList.add('active');
+            btnLabel.textContent = 'Stop Detection';
+            startBtn.querySelector('.btn-icon').textContent = '■';
+            recDot.classList.add('active');
+            recLabel.textContent = 'REC';
+            scanLine.classList.add('active');
+            corners.forEach(c => c.classList.add('active'));
+            detectLoop();
+        } else {
+            startBtn.classList.remove('active');
+            btnLabel.textContent = 'Start Detection';
+            startBtn.querySelector('.btn-icon').textContent = '▶';
+            recDot.classList.remove('active');
+            recLabel.textContent = 'IDLE';
+            scanLine.classList.remove('active');
+            corners.forEach(c => c.classList.remove('active'));
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            signLetter.textContent = '—';
+            signName.textContent   = 'detection paused';
+            confFill.style.width   = '0%';
+            confValue.textContent  = '—';
+        }
+    }
+
+    async function detectLoop() {
+        if (!isDetecting) return;
+        if (isProcessing) { requestAnimationFrame(detectLoop); return; }
+        isProcessing = true;
+
+        const tmp = document.createElement('canvas');
+        tmp.width  = video.videoWidth;
+        tmp.height = video.videoHeight;
+        tmp.getContext('2d').drawImage(video, 0, 0);
+
+        tmp.toBlob(async (blob) => {
+            const form = new FormData();
+            form.append('file', blob, 'frame.jpg');
+            frames++;
+            document.getElementById('statFrames').textContent = frames;
+
+            const t0 = performance.now();
+            try {
+                const res  = await fetch(API_URL, { method: 'POST', body: form });
+                const json = await res.json();
+                const ms   = Math.round(performance.now() - t0);
+                document.getElementById('statFps').textContent = ms;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                if (json.success && json.data.sign) {
+                    updateSign(json.data.sign, json.data.confidence);
+                    drawBox(json.data.box, json.data.sign, json.data.confidence);
+                } else {
+                    signName.textContent = 'no hand detected';
+                }
+            } catch (e) {
+                signName.textContent = 'backend disconnected';
+            }
+
+            isProcessing = false;
+            requestAnimationFrame(detectLoop);
+        }, 'image/jpeg', 0.8);
+    }
+
+    function updateSign(sign, confidence) {
+        if (sign !== lastSign) {
+            signLetter.textContent = sign;
+            signLetter.classList.remove('flash');
+            void signLetter.offsetWidth;
+            signLetter.classList.add('flash');
+            signName.textContent = ASL_NAMES[sign] || sign;
+            lastSign = sign;
+            detections++;
+            uniqueSigns.add(sign);
+            document.getElementById('statDetections').textContent = detections;
+            document.getElementById('statUnique').textContent     = uniqueSigns.size;
+            addToHistory(sign);
+        }
+        const pct = confidence === 'High' ? 90 : confidence === 'Medium' ? 60 : 40;
+        confFill.style.width  = pct + '%';
+        confValue.textContent = confidence;
+    }
+
+    function drawBox(box, sign, confidence) {
+        if (!box) return;
+        const [x1, y1, x2, y2] = box;
+        const color = confidence === 'High' ? '#00ffc8' : '#00a8ff';
+        ctx.strokeStyle = color;
+        ctx.lineWidth   = 2;
+        ctx.shadowColor = color;
+        ctx.shadowBlur  = 12;
+        ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+        ctx.shadowBlur  = 0;
+        ctx.font = 'bold 16px Syne, sans-serif';
+        const tw = ctx.measureText(sign).width;
+        ctx.fillStyle = color;
+        ctx.fillRect(x1, y1 - 28, tw + 16, 28);
+        ctx.fillStyle = '#080b0f';
+        ctx.fillText(sign, x1 + 8, y1 - 9);
+    }
+
+    function addToHistory(sign) {
+        history.push(sign);
+        if (history.length > 20) history.shift();
+        historyEl.innerHTML = history.map(s =>
+            `<div class="history-chip">${s}</div>`
+        ).join('');
+    }
+
+    function clearHistory() {
+        history  = [];
+        lastSign = null;
+        historyEl.innerHTML = '<div class="history-empty">No signs detected yet</div>';
+    }
+
+    setupWebcam();
+</script>
+</body>
+</html>
