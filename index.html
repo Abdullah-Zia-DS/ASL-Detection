@@ -797,13 +797,10 @@
         isProcessing = true;
 
         const tmp = document.createElement('canvas');
-        
-        // 🔥 SPEED HACK: Shrink from 640x480 to 320x240 for 4x faster internet transfer!
-        tmp.width  = 320;
-        tmp.height = 240;
-        tmp.getContext('2d').drawImage(video, 0, 0, tmp.width, tmp.height);
+        tmp.width  = video.videoWidth;
+        tmp.height = video.videoHeight;
+        tmp.getContext('2d').drawImage(video, 0, 0);
 
-        // 🔥 SPEED HACK: Compress JPEG to 0.5 (50%)
         tmp.toBlob(async (blob) => {
             const form = new FormData();
             form.append('file', blob, 'frame.jpg');
@@ -820,11 +817,7 @@
 
                 if (json.success && json.data.sign) {
                     updateSign(json.data.sign, json.data.confidence);
-                    
-                    // 🔥 MULTIPLY BOX BY 2: Because we shrank the image to half size,
-                    // the AI returns half-size coordinates. Multiply by 2 to fit the UI screen!
-                    const scaledBox = json.data.box.map(coord => coord * 2);
-                    drawBox(scaledBox, json.data.sign, json.data.confidence);
+                    drawBox(json.data.box, json.data.sign, json.data.confidence);
                 } else {
                     signName.textContent = 'no hand detected';
                 }
@@ -834,7 +827,7 @@
 
             isProcessing = false;
             requestAnimationFrame(detectLoop);
-        }, 'image/jpeg', 0.5); // <-- 0.5 Compression applied here
+        }, 'image/jpeg', 0.8);
     }
 
     function updateSign(sign, confidence) {
