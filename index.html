@@ -746,6 +746,10 @@
     let frames       = 0;
     let uniqueSigns  = new Set();
 
+    // 🔥 FIX: Create the hidden canvas ONCE outside the loop to stop memory leaks and freezing!
+    const tmpCanvas = document.createElement('canvas');
+    const tmpCtx = tmpCanvas.getContext('2d');
+
     async function setupWebcam() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -756,6 +760,8 @@
             video.onloadedmetadata = () => {
                 canvas.width  = video.videoWidth;
                 canvas.height = video.videoHeight;
+                tmpCanvas.width = video.videoWidth;
+                tmpCanvas.height = video.videoHeight;
             };
             statusDot.classList.add('live');
             statusText.textContent = 'camera live';
@@ -796,48 +802,51 @@
         if (isProcessing) { requestAnimationFrame(detectLoop); return; }
         isProcessing = true;
 
-        const tmp = document.createElement('canvas');
-        tmp.width  = video.videoWidth;
-        tmp.height = video.videoHeight;
-        tmp.getContext('2d').drawImage(video, 0, 0, tmp.width, tmp.height);
+        // Draw video to hidden canvas
+        tmpCtx.drawImage(video, 0, 0, tmpCanvas.width, tmpCanvas.height);
 
-        // 0.4 compression for maximum internet speed
-        tmp.toBlob(async (blob) => {
+        // Compress to 0.5 to keep it fast without making it blurry
+        tmpCanvas.toBlob(async (blob) => {
             const form = new FormData();
             form.append('file', blob, 'frame.jpg');
-            frames++;
-            document.getElementById('statFrames').textContent = frames;
 
             const t0 = performance.now();
             try {
                 const res  = await fetch(API_URL, { method: 'POST', body: form });
                 const json = await res.json();
-                const ms   = Math.round(performance.now() - t0);
-                document.getElementById('statFps').textContent = ms;
                 
-                // ONLY clear the screen right before we draw the new box!
+                // Clear the old box instantly
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
                 if (json.success && json.data.sign) {
                     updateSign(json.data.sign, json.data.confidence);
-                    drawBox(json.data.box, json.data.sign, json.data.confidence);
+                    
+                    // 🔥 FIX: Safety check to guarantee the box draws correctly
+                    if (json.data.box && json.data.box.length === 4) {
+                        drawBox(json.data.box, json.data.sign, json.data.confidence);
+                    }
                 } else {
                     signName.textContent = 'no hand detected';
                 }
+
+                const ms = Math.round(performance.now() - t0);
+                document.getElementById('statFps').textContent = ms;
+                frames++;
+                document.getElementById('statFrames').textContent = frames;
+
             } catch (e) {
-                // If it crashes, clear the box
+                console.error(e);
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 signName.textContent = 'backend disconnected';
             }
 
-            // THROTTLE: Wait 100ms before taking the next picture. 
-            // This stops your internet from getting choked and makes the video feed smoother!
+            // Wait 100ms before next frame to keep browser running smoothly
             setTimeout(() => {
                 isProcessing = false;
                 requestAnimationFrame(detectLoop);
             }, 100);
 
-        }, 'image/jpeg', 0.4); 
+        }, 'image/jpeg', 0.5); 
     }
 
     function updateSign(sign, confidence) {
@@ -860,15 +869,16 @@
     }
 
     function drawBox(box, sign, confidence) {
-        if (!box) return;
         const [x1, y1, x2, y2] = box;
         const color = confidence === 'High' ? '#00ffc8' : '#00a8ff';
+        
         ctx.strokeStyle = color;
-        ctx.lineWidth   = 2;
+        ctx.lineWidth   = 3;
         ctx.shadowColor = color;
         ctx.shadowBlur  = 12;
         ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
         ctx.shadowBlur  = 0;
+        
         ctx.font = 'bold 16px Syne, sans-serif';
         const tw = ctx.measureText(sign).width;
         ctx.fillStyle = color;
