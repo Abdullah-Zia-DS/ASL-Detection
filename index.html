@@ -797,16 +797,11 @@
         isProcessing = true;
 
         const tmp = document.createElement('canvas');
-        // Keep the full size so the AI stays highly accurate!
         tmp.width  = video.videoWidth;
         tmp.height = video.videoHeight;
         tmp.getContext('2d').drawImage(video, 0, 0, tmp.width, tmp.height);
 
-        // CLEAR old boxes immediately so they don't get "stuck" on the screen
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // 🔥 THE GOLDEN BALANCE: 0.4 Quality
-        // Drops file size to ~15KB for fast internet travel, but keeps full 640p resolution!
+        // 0.4 compression for maximum internet speed
         tmp.toBlob(async (blob) => {
             const form = new FormData();
             form.append('file', blob, 'frame.jpg');
@@ -820,7 +815,7 @@
                 const ms   = Math.round(performance.now() - t0);
                 document.getElementById('statFps').textContent = ms;
                 
-                // Clear again just in case
+                // ONLY clear the screen right before we draw the new box!
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
                 if (json.success && json.data.sign) {
@@ -830,12 +825,19 @@
                     signName.textContent = 'no hand detected';
                 }
             } catch (e) {
+                // If it crashes, clear the box
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
                 signName.textContent = 'backend disconnected';
             }
 
-            isProcessing = false;
-            requestAnimationFrame(detectLoop);
-        }, 'image/jpeg', 0.4); // <-- 0.4 Quality applied here
+            // THROTTLE: Wait 100ms before taking the next picture. 
+            // This stops your internet from getting choked and makes the video feed smoother!
+            setTimeout(() => {
+                isProcessing = false;
+                requestAnimationFrame(detectLoop);
+            }, 100);
+
+        }, 'image/jpeg', 0.4); 
     }
 
     function updateSign(sign, confidence) {
