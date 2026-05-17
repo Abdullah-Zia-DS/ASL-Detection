@@ -797,11 +797,16 @@
         isProcessing = true;
 
         const tmp = document.createElement('canvas');
+        // Keep the full size so the AI stays highly accurate!
         tmp.width  = video.videoWidth;
         tmp.height = video.videoHeight;
         tmp.getContext('2d').drawImage(video, 0, 0, tmp.width, tmp.height);
 
-        // Back to 0.8 quality to guarantee the AI can see the fingers perfectly!
+        // CLEAR old boxes immediately so they don't get "stuck" on the screen
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 🔥 THE GOLDEN BALANCE: 0.4 Quality
+        // Drops file size to ~15KB for fast internet travel, but keeps full 640p resolution!
         tmp.toBlob(async (blob) => {
             const form = new FormData();
             form.append('file', blob, 'frame.jpg');
@@ -814,6 +819,8 @@
                 const json = await res.json();
                 const ms   = Math.round(performance.now() - t0);
                 document.getElementById('statFps').textContent = ms;
+                
+                // Clear again just in case
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
                 if (json.success && json.data.sign) {
@@ -828,7 +835,7 @@
 
             isProcessing = false;
             requestAnimationFrame(detectLoop);
-        }, 'image/jpeg', 0.8); 
+        }, 'image/jpeg', 0.4); // <-- 0.4 Quality applied here
     }
 
     function updateSign(sign, confidence) {
